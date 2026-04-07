@@ -1,0 +1,72 @@
+name: Potong Video YouTube (High Quality - Tanpa Logo)
+
+on:
+  workflow_dispatch:
+    inputs:
+      link_youtube:
+        description: 'Link YouTube (Video Sumber)'
+        required: true
+      mulai:
+        description: 'Mulai (Jam:Menit:Detik)'
+        default: '00:00:10'
+      selesai:
+        description: 'Selesai (Jam:Menit:Detik)'
+        default: '00:00:40'
+
+jobs:
+  proses_editing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 3. Install Tools (Optimized)
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg jq curl bc
+          sudo curl -L https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+          sudo chmod a+rx /usr/local/bin/yt-dlp
+          yt-dlp -U
+
+      - name: 4. Eksekusi Potong Video (High Bitrate)
+        env:
+          YT_COOKIES: ${{ secrets.YT_COOKIES }}
+        run: |
+          # Simpan cookies dari secrets
+          echo "$YT_COOKIES" > cookies.txt
+          
+          echo "--- [Mencari Direct Link] ---"
+          # Mengambil kualitas 720p terbaik
+          VIDEO_URL=$(yt-dlp --cookies cookies.txt \
+                             --js-runtime node \
+                             --force-ipv4 \
+                             --no-playlist \
+                             --extractor-args "youtube:player_client=mweb,web" \
+                             -f "bestvideo[height<=720]+bestaudio/best[height<=720]" \
+                             -g "${{ github.event.inputs.link_youtube }}")
+
+          if [ -z "$VIDEO_URL" ]; then
+            echo "ERROR: Gagal mendapatkan URL. Cek YT_COOKIES Anda!"
+            exit 1
+          fi
+
+          echo "--- [Memulai Pemotongan Video High-Quality] ---"
+          # Penjelasan Parameter Baru:
+          # -crf 18: Kualitas jauh lebih tajam (semakin kecil angka, semakin bagus)
+          # -preset medium: Kompresi lebih detail dibanding 'fast'
+          # -c:a aac -b:a 192k: Audio lebih jernih
+          
+          ffmpeg -ss ${{ github.event.inputs.mulai }} -to ${{ github.event.inputs.selesai }} -i "$VIDEO_URL" \
+          -c:v libx264 -preset medium -crf 18 -c:a aac -b:a 192k \
+          hasil_potongan.mp4
+
+      - name: 5. Upload Hasil
+        uses: actions/upload-artifact@v4
+        with:
+          name: Video_720p_Tajam
+          path: hasil_potongan.mp4
+          retention-days: 1
