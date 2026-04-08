@@ -1,0 +1,71 @@
+name: Potong Audio YouTube (MP3 - High Quality)
+
+on:
+  workflow_dispatch:
+    inputs:
+      link_youtube:
+        description: 'Link YouTube (Video Sumber)'
+        required: true
+      mulai:
+        description: 'Mulai (Jam:Menit:Detik)'
+        default: '00:00:10'
+      selesai:
+        description: 'Selesai (Jam:Menit:Detik)'
+        default: '00:00:40'
+
+jobs:
+  proses_audio:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 3. Install Tools (Optimized)
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg jq curl bc
+          sudo curl -L https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+          sudo chmod a+rx /usr/local/bin/yt-dlp
+          yt-dlp -U
+
+      - name: 4. Eksekusi Ekstrak Audio (MP3 320kbps)
+        env:
+          YT_COOKIES: ${{ secrets.YT_COOKIES }}
+        run: |
+          echo "$YT_COOKIES" > cookies.txt
+          
+          echo "--- [Mencari Direct Link Audio] ---"
+          # -f "bestaudio" hanya mengambil stream suara saja agar hemat bandwidth
+          AUDIO_URL=$(yt-dlp --cookies cookies.txt \
+                             --js-runtime node \
+                             --force-ipv4 \
+                             --no-playlist \
+                             --extractor-args "youtube:player_client=mweb,web" \
+                             -f "bestaudio" \
+                             -g "${{ github.event.inputs.link_youtube }}")
+
+          if [ -z "$AUDIO_URL" ]; then
+            echo "ERROR: Gagal mendapatkan URL. Cek YT_COOKIES Anda!"
+            exit 1
+          fi
+
+          echo "--- [Memulai Konversi ke MP3] ---"
+          # Penjelasan Parameter:
+          # -vn: Membuang track video (Voice Only)
+          # -c:a libmp3lame: Encoder MP3 standar terbaik
+          # -q:a 0: Kualitas Variable Bitrate (VBR) terbaik (setara ~320kbps)
+          
+          ffmpeg -ss ${{ github.event.inputs.mulai }} -to ${{ github.event.inputs.selesai }} -i "$AUDIO_URL" \
+          -vn -c:a libmp3lame -q:a 0 \
+          hasil_audio.mp3
+
+      - name: 5. Upload Hasil
+        uses: actions/upload-artifact@v4
+        with:
+          name: Audio_MP3_Jernih
+          path: hasil_audio.mp3
+          retention-days: 1
