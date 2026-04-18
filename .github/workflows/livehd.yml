@@ -1,4 +1,4 @@
-name: Potong Video YouTube (High Quality - Tanpa Logo)
+name: Potong Video YouTube (1080p Ultra HD)
 
 on:
   workflow_dispatch:
@@ -25,48 +25,52 @@ jobs:
         with:
           node-version: '20'
 
-      - name: 3. Install Tools (Optimized)
+      - name: 3. Install Tools (High Efficiency)
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg jq curl bc
-          sudo curl -L https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+          sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
           sudo chmod a+rx /usr/local/bin/yt-dlp
-          yt-dlp -U
 
-      - name: 4. Eksekusi Potong Video (High Bitrate)
+      - name: 4. Eksekusi Potong Video (1080p Best Quality)
         env:
           YT_COOKIES: ${{ secrets.YT_COOKIES }}
         run: |
-          # Simpan cookies dari secrets
-          echo "$YT_COOKIES" > cookies.txt
+          # Simpan cookies jika ada
+          if [ -n "$YT_COOKIES" ]; then
+            echo "$YT_COOKIES" > cookies.txt
+            COOKIE_ARG="--cookies cookies.txt"
+          else
+            COOKIE_ARG=""
+          fi
           
-          echo "--- [Mencari Direct Link] ---"
-          # Mengambil kualitas 720p terbaik
-          VIDEO_URL=$(yt-dlp --cookies cookies.txt \
-                             --js-runtime node \
+          echo "--- [Mencari Direct Link 1080p] ---"
+          # -f "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]"
+          # Memastikan kita mengambil 1080p terbaik dengan format mp4/m4a agar kompatibel
+          VIDEO_URL=$(yt-dlp $COOKIE_ARG \
                              --force-ipv4 \
                              --no-playlist \
-                             --extractor-args "youtube:player_client=mweb,web" \
-                             -f "bestvideo[height<=720]+bestaudio/best[height<=720]" \
+                             -f "bestvideo[height<=1080]+bestaudio/best[height<=1080]" \
                              -g "${{ github.event.inputs.link_youtube }}")
 
           if [ -z "$VIDEO_URL" ]; then
-            echo "ERROR: Gagal mendapatkan URL. Cek YT_COOKIES Anda!"
+            echo "ERROR: Gagal mendapatkan URL 1080p. Cek ketersediaan video atau YT_COOKIES!"
             exit 1
           fi
 
-          echo "--- [Memulai Pemotongan Video High-Quality] ---"
-          # Penjelasan Parameter Baru:
-          # -crf 18: Kualitas jauh lebih tajam (semakin kecil angka, semakin bagus)
-          # -preset medium: Kompresi lebih detail dibanding 'fast'
-          # -c:a aac -b:a 192k: Audio lebih jernih
+          echo "--- [Memulai Pemotongan Video 1080p High-Bitrate] ---"
+          # Parameter Pro:
+          # -crf 17: Level visual hampir tidak bisa dibedakan dari sumber asli (Sangat Jernih)
+          # -preset slow: FFmpeg bekerja lebih keras untuk menjaga detail tekstur
+          # -b:a 320k: Kualitas audio tertinggi untuk format AAC
           
           ffmpeg -ss ${{ github.event.inputs.mulai }} -to ${{ github.event.inputs.selesai }} -i "$VIDEO_URL" \
-          -c:v libx264 -preset medium -crf 18 -c:a aac -b:a 192k \
-          hasil_potongan.mp4
+          -c:v libx264 -preset slow -crf 17 -c:a aac -b:a 320k -movflags +faststart \
+          hasil_1080p_jernih.mp4
 
-      - name: 5. Upload Hasil
+      - name: 5. Upload Hasil HD
         uses: actions/upload-artifact@v4
         with:
-          name: Video_720p_Tajam
-          path: hasil_potongan.mp4
+          name: Video_1080p_FullHD
+          path: hasil_1080p_jernih.mp4
           retention-days: 1
+          
